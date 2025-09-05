@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: recruitment_postgres
+    environment:
+      POSTGRES_DB: recruitment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - recruitment_network
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: auth_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=recruitment_db
+      - JWT_SECRET=your-secret-key
+      - PORT=8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+    networks:
+      - recruitment_network
+
+  job-service:
+    build:
+      context: .
+      dockerfile: services/job-service/Dockerfile
+    container_name: job_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=recruitment_db
+      - AUTH_SERVICE_URL=http://auth-service:8083
+      - PORT=8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - auth-service
+    networks:
+      - recruitment_network
+
+  candidate-service:
+    build:
+      context: .
+      dockerfile: services/candidate-service/Dockerfile
+    container_name: candidate_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=recruitment_db
+      - AUTH_SERVICE_URL=http://auth-service:8083
+      - JOB_SERVICE_URL=http://job-service:8081
+      - PORT=8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - auth-service
+      - job-service
+    networks:
+      - recruitment_network
+
+volumes:
+  postgres_data:
+
+networks:
+  recruitment_network:
+    driver: bridge
